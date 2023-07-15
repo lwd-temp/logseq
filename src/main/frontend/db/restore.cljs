@@ -2,7 +2,6 @@
   "Fns for DB restore(from text or sqlite)"
   (:require [clojure.string :as string]
             [datascript.core :as d]
-            [electron.ipc :as ipc]
             [frontend.config :as config]
             [frontend.db.conn :as db-conn]
             [frontend.db.migrate :as db-migrate]
@@ -15,7 +14,8 @@
             [logseq.db.sqlite.restore :as sqlite-restore]
             [promesa.core :as p]
             [frontend.util :as util]
-            [cljs-time.core :as t]))
+            [cljs-time.core :as t]
+            [frontend.persist-db :as persist-db]))
 
 (defn- old-schema?
   "Requires migration if the schema version is older than db-schema/version"
@@ -88,7 +88,8 @@
   [repo]
   (state/set-state! :graph/loading? true)
   (p/let [start-time (t/now)
-          data (ipc/ipc :get-initial-data repo)
+          ; data (ipc/ipc :get-initial-data repo)
+          data (persist-db/fetch-initital repo)
           {:keys [conn uuid->db-id-map journal-blocks datoms-count]}
           (sqlite-restore/restore-initial-data data {:conn-from-datoms-fn
                                                      (fn profiled-d-conn [& args]
@@ -108,7 +109,8 @@
 
     (js/setTimeout
      (fn []
-       (p/let [other-data (ipc/ipc :get-other-data repo (map :uuid journal-blocks))
+       (p/let [;other-data (ipc/ipc :get-other-data repo (map :uuid journal-blocks))
+               other-data (persist-db/fetch-by-exclude repo (map :uuid journal-blocks))
                _ (set-unloaded-block-ids! repo other-data)
                _ (p/delay 10)]
          (restore-other-data-from-sqlite! repo other-data uuid->db-id-map)))
